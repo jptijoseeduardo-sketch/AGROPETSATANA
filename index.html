@@ -1,43 +1,56 @@
-index.html
-import express from "express";
-import Database from "better-sqlite3";
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AGRO PET SANTANA - Gestão</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="max-w-md mx-auto bg-white min-h-screen shadow-lg">
+        <header class="bg-blue-600 p-4 text-white text-center">
+            <h1 class="text-xl font-bold">AGRO PET SANTANA</h1>
+            <p class="text-sm opacity-80">Nuvem Ativa - Gestão de Estoque</p>
+        </header>
+        
+        <main class="p-4">
+            <div id="app">
+                <p class="text-center text-gray-500">Carregando sistema...</p>
+            </div>
+        </main>
+    </div>
 
-const db = new Database("inventory.db");
+    <script>
+        // Sistema simples de estoque via navegador
+        const app = document.getElementById('app');
+        let estoque = JSON.parse(localStorage.getItem('estoque')) || [];
 
-// Criar Tabelas
-db.exec(`
-  CREATE TABLE IF NOT EXISTS products (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    sku TEXT,
-    cost_price REAL NOT NULL,
-    selling_price REAL NOT NULL,
-    quantity INTEGER DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS sales (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    product_id INTEGER,
-    quantity INTEGER,
-    cost_price REAL,
-    selling_price REAL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-`);
+        function render() {
+            app.innerHTML = `
+                <div class="mb-6">
+                    <h2 class="font-bold mb-2">Adicionar Produto</h2>
+                    <input id="nome" placeholder="Nome" class="w-full border p-2 mb-2 rounded">
+                    <input id="preco" type="number" placeholder="Preço" class="w-full border p-2 mb-2 rounded">
+                    <button onclick="add()" class="w-full bg-green-500 text-white p-2 rounded">Salvar no Estoque</button>
+                </div>
+                <hr>
+                <div class="mt-4">
+                    <h2 class="font-bold mb-2">Lista de Produtos</h2>
+                    ${estoque.map(p => `<div class="p-2 border-bottom border-b flex justify-between"><span>${p.nome}</span> <b>R$ ${p.preco}</b></div>`).join('')}
+                </div>
+            `;
+        }
 
-const app = express();
-app.use(express.json());
-
-// Rotas da API
-app.get("/api/products", (req, res) => {
-  const products = db.prepare("SELECT * FROM products").all();
-  res.json(products);
-});
-
-app.post("/api/products", (req, res) => {
-  const { name, sku, cost_price, selling_price, quantity } = req.body;
-  db.prepare("INSERT INTO products (name, sku, cost_price, selling_price, quantity) VALUES (?, ?, ?, ?, ?)")
-    .run(name, sku, cost_price, selling_price, quantity);
-  res.sendStatus(201);
-});
-
-app.listen(3000, () => console.log("Servidor rodando na porta 3000"));
+        window.add = function() {
+            const nome = document.getElementById('nome').value;
+            const preco = document.getElementById('preco').value;
+            if(nome && preco) {
+                estoque.push({nome, preco});
+                localStorage.setItem('estoque', JSON.stringify(estoque));
+                render();
+            }
+        }
+        render();
+    </script>
+</body>
+</html>
