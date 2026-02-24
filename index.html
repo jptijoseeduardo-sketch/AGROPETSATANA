@@ -1,0 +1,43 @@
+index.html
+import express from "express";
+import Database from "better-sqlite3";
+
+const db = new Database("inventory.db");
+
+// Criar Tabelas
+db.exec(`
+  CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    sku TEXT,
+    cost_price REAL NOT NULL,
+    selling_price REAL NOT NULL,
+    quantity INTEGER DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS sales (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER,
+    quantity INTEGER,
+    cost_price REAL,
+    selling_price REAL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+const app = express();
+app.use(express.json());
+
+// Rotas da API
+app.get("/api/products", (req, res) => {
+  const products = db.prepare("SELECT * FROM products").all();
+  res.json(products);
+});
+
+app.post("/api/products", (req, res) => {
+  const { name, sku, cost_price, selling_price, quantity } = req.body;
+  db.prepare("INSERT INTO products (name, sku, cost_price, selling_price, quantity) VALUES (?, ?, ?, ?, ?)")
+    .run(name, sku, cost_price, selling_price, quantity);
+  res.sendStatus(201);
+});
+
+app.listen(3000, () => console.log("Servidor rodando na porta 3000"));
