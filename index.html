@@ -1,56 +1,202 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AGRO PET SANTANA - Gestão</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100">
-    <div class="max-w-md mx-auto bg-white min-h-screen shadow-lg">
-        <header class="bg-blue-600 p-4 text-white text-center">
-            <h1 class="text-xl font-bold">AGRO PET SANTANA</h1>
-            <p class="text-sm opacity-80">Nuvem Ativa - Gestão de Estoque</p>
-        </header>
-        
-        <main class="p-4">
-            <div id="app">
-                <p class="text-center text-gray-500">Carregando sistema...</p>
+import React, { useState, useEffect } from 'react';
+import { 
+  Search, Package, Plus, Trash2, Edit2, Lock, ArrowRight, 
+  TrendingUp, DollarSign, Tag, X, ShoppingCart, Download, Cloud, Trash
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { io } from 'socket.io-client';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+// Interface do Produto
+interface Product {
+  id: number;
+  name: string;
+  sku: string;
+  cost_price: number;
+  selling_price: number;
+  quantity: number;
+}
+
+export default function App() {
+  const [view, setView] = useState<'customer' | 'admin'>('customer');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [sellingProduct, setSellingProduct] = useState<Product | null>(null);
+  const [sellQuantity, setSellQuantity] = useState('1');
+  const [cart, setCart] = useState<{ product: Product, quantity: number }[]>([]);
+  const [showCart, setShowCart] = useState(false);
+  const [adminTab, setAdminTab] = useState<'inventory' | 'reports'>('inventory');
+  const [reportData, setReportData] = useState<any>(null);
+  const [dailySales, setDailySales] = useState<any[]>([]);
+
+  // Carregar produtos e relatórios
+  const loadProducts = async () => {
+    const res = await fetch('/api/products');
+    const data = await res.json();
+    setProducts(data);
+  };
+
+  const loadReport = async () => {
+    const [reportRes, dailyRes] = await Promise.all([
+      fetch('/api/reports/sales'),
+      fetch('/api/reports/sales/daily')
+    ]);
+    setReportData(await reportRes.json());
+    setDailySales(await dailyRes.json());
+  };
+
+  useEffect(() => {
+    if (isAdminAuthenticated) {
+      adminTab === 'inventory' ? loadProducts() : loadReport();
+    }
+  }, [isAdminAuthenticated, adminTab]);
+
+  // Lógica de Busca
+  const handleSearch = async (q: string) => {
+    setSearchQuery(q);
+    if (q.length < 2) return setProducts([]);
+    const res = await fetch(`/api/products/search?q=${encodeURIComponent(q)}`);
+    setProducts(await res.json());
+  };
+
+  // ... (Restante das funções de Venda, Cadastro e Exclusão)
+
+  return (
+    <div className="min-h-screen bg-slate-900 p-4 sm:p-8">
+      <main className="max-w-4xl mx-auto bg-white rounded-3xl shadow-2xl overflow-hidden min-h-[80vh]">
+        {/* Cabeçalho */}
+        <div className="p-6 border-b flex justify-between items-center bg-slate-50">
+          <h1 className="text-2xl font-bold text-slate-800">AGRO PET SANTANA</h1>
+          <button 
+            onClick={() => setView(view === 'customer' ? 'admin' : 'customer')}
+            className="text-sm font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl"
+          >
+            {view === 'customer' ? 'Área do Gerente' : 'Voltar para Loja'}
+          </button>
+        </div>
+
+        <div className="p-6">
+          {view === 'customer' ? (
+            /* VISÃO DO CLIENTE / VENDEDOR */
+            <div className="space-y-6">
+              <input 
+                type="text" 
+                placeholder="Buscar produto..." 
+                className="w-full p-4 bg-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500"
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+              />
+              <div className="grid gap-4">
+                {products.map(p => (
+                  <div key={p.id} className="p-4 border rounded-2xl flex justify-between items-center">
+                    <div>
+                      <h3 className="font-bold">{p.name}</h3>
+                      <p className="text-indigo-600 font-bold text-xl">R$ {p.selling_price.toFixed(2)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-slate-400">Estoque: {p.quantity} un</p>
+                      <button onClick={() => setSellingProduct(p)} className="mt-2 bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold">Vender</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-        </main>
+          ) : (
+            /* VISÃO DO ADMINISTRADOR */
+            !isAdminAuthenticated ? (
+              <div className="text-center py-20">
+                <Lock className="mx-auto mb-4 text-slate-300" size={48} />
+                <input 
+                  type="password" 
+                  placeholder="Senha (admin123)" 
+                  className="border p-3 rounded-xl mb-4 block mx-auto"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                />
+                <button 
+                  onClick={() => adminPassword === 'admin123' && setIsAdminAuthenticated(true)}
+                  className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold"
+                >
+                  Entrar
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Lista de Produtos com Margem */}
+                {products.map(p => {
+                  const profit = p.selling_price - p.cost_price;
+                  const margin = p.selling_price > 0 ? (profit / p.selling_price) * 100 : 0;
+                  return (
+                    <div key={p.id} className="p-4 border rounded-2xl">
+                      <div className="flex justify-between mb-2">
+                        <span className="font-bold">{p.name}</span>
+                        <span className="text-slate-400 text-xs">SKU: {p.sku}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="bg-slate-50 p-2 rounded-lg">Custo: R$ {p.cost_price.toFixed(2)}</div>
+                        <div className="bg-indigo-50 p-2 rounded-lg font-bold text-indigo-600">Venda: R$ {p.selling_price.toFixed(2)}</div>
+                      </div>
+                      <div className="mt-2 pt-2 border-t flex justify-between items-center">
+                        <span className="text-xs text-emerald-600 font-bold">Lucro: R$ {profit.toFixed(2)}</span>
+                        <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md font-bold">
+                          Margem: {margin.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          )}
+        </div>
+      </main>
     </div>
+  );
+}
+        import express from "express";
+import Database from "better-sqlite3";
 
-    <script>
-        // Sistema simples de estoque via navegador
-        const app = document.getElementById('app');
-        let estoque = JSON.parse(localStorage.getItem('estoque')) || [];
+const db = new Database("inventory.db");
 
-        function render() {
-            app.innerHTML = `
-                <div class="mb-6">
-                    <h2 class="font-bold mb-2">Adicionar Produto</h2>
-                    <input id="nome" placeholder="Nome" class="w-full border p-2 mb-2 rounded">
-                    <input id="preco" type="number" placeholder="Preço" class="w-full border p-2 mb-2 rounded">
-                    <button onclick="add()" class="w-full bg-green-500 text-white p-2 rounded">Salvar no Estoque</button>
-                </div>
-                <hr>
-                <div class="mt-4">
-                    <h2 class="font-bold mb-2">Lista de Produtos</h2>
-                    ${estoque.map(p => `<div class="p-2 border-bottom border-b flex justify-between"><span>${p.nome}</span> <b>R$ ${p.preco}</b></div>`).join('')}
-                </div>
-            `;
-        }
+// Criar Tabelas
+db.exec(`
+  CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    sku TEXT,
+    cost_price REAL NOT NULL,
+    selling_price REAL NOT NULL,
+    quantity INTEGER DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS sales (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER,
+    quantity INTEGER,
+    cost_price REAL,
+    selling_price REAL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
 
-        window.add = function() {
-            const nome = document.getElementById('nome').value;
-            const preco = document.getElementById('preco').value;
-            if(nome && preco) {
-                estoque.push({nome, preco});
-                localStorage.setItem('estoque', JSON.stringify(estoque));
-                render();
-            }
-        }
-        render();
-    </script>
-</body>
-</html>
+const app = express();
+app.use(express.json());
+
+// Rotas da API
+app.get("/api/products", (req, res) => {
+  const products = db.prepare("SELECT * FROM products").all();
+  res.json(products);
+});
+
+app.post("/api/products", (req, res) => {
+  const { name, sku, cost_price, selling_price, quantity } = req.body;
+  db.prepare("INSERT INTO products (name, sku, cost_price, selling_price, quantity) VALUES (?, ?, ?, ?, ?)")
+    .run(name, sku, cost_price, selling_price, quantity);
+  res.sendStatus(201);
+});
+
+app.listen(3000, () => console.log("Servidor rodando na porta 3000"));
